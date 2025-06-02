@@ -2,6 +2,8 @@ use chrono::{NaiveDate, TimeZone, Utc};
 use hmac::{Hmac, Mac};
 use reqwest::blocking::Client;
 use reqwest::header::HeaderMap;
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Sha256, Sha512, Digest};
@@ -104,6 +106,10 @@ fn kraken_private_request(
     json["result"].clone()
 }
 
+fn to_decimal(value: &Value) -> Decimal {
+    Decimal::try_from(value.as_number().unwrap().as_str()).unwrap()
+}
+
 pub fn fetch_kraken_activity(
     initial: NaiveDate,
     final_: NaiveDate,
@@ -127,10 +133,10 @@ pub fn fetch_kraken_activity(
     );
     let mut deposits: Vec<Value> = deposits_json
         .as_array()
-        .unwrap_or(&vec![])
+        .unwrap()
         .iter()
         .filter(|entry| {
-            entry["time"].as_u64().map(|ts| ts >= start_ts && ts <= end_ts).unwrap_or(false)
+            entry["time"].as_u64().map(|ts| ts >= start_ts && ts <= end_ts).unwrap()
         })
         .cloned()
         .collect();
@@ -147,10 +153,10 @@ pub fn fetch_kraken_activity(
     );
     let mut withdrawals: Vec<Value> = withdrawals_json
         .as_array()
-        .unwrap_or(&vec![])
+        .unwrap()
         .iter()
         .filter(|entry| {
-            entry["time"].as_u64().map(|ts| ts >= start_ts && ts <= end_ts).unwrap_or(false)
+            entry["time"].as_u64().map(|ts| ts >= start_ts && ts <= end_ts).unwrap()
         })
         .cloned()
         .collect();
@@ -167,21 +173,19 @@ pub fn fetch_kraken_activity(
     );
     let mut trades: Vec<Value> = trades_json["trades"]
         .as_object()
-        .unwrap_or(&serde_json::Map::new())
+        .unwrap()
         .values()
         .filter(|entry| {
-            entry["time"].as_f64().map(|ts| {
-                let ts = ts as u64;
-                ts >= start_ts && ts <= end_ts
-            }).unwrap_or(false)
+            let ts = to_decimal(&entry["time"]);
+            ts >= Decimal::from(start_ts) && ts <= Decimal::from(end_ts)
         })
         .cloned()
         .collect();
 
     // Sort all by time ascending
-    deposits.sort_by_key(|v| v["time"].as_u64().unwrap_or(0));
-    withdrawals.sort_by_key(|v| v["time"].as_u64().unwrap_or(0));
-    trades.sort_by_key(|v| (v["time"].as_f64().unwrap_or(0.0) * 1000.0) as u64);
+    deposits.sort_by_key(|v| v["time"].as_u64().unwrap());
+    withdrawals.sort_by_key(|v| v["time"].as_u64().unwrap());
+    trades.sort_by_key(|v|to_decimal(&v["time"]));
 
     (deposits, withdrawals, trades)
 }
