@@ -1,7 +1,7 @@
+use crate::report::encoding::{Field, write_register_row};
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use std::io::{self, Write};
-use crate::report::encoding::{Field, write_register_row};
 
 /// Common fields shared across all transaction records
 #[derive(Debug)]
@@ -35,7 +35,9 @@ impl ExchangeInfo {
         vec![
             Field::AlphaNumber { value: &self.name },
             Field::AlphaNumber { value: &self.url },
-            Field::AlphaNumber { value: &self.country },
+            Field::AlphaNumber {
+                value: &self.country,
+            },
         ]
     }
 }
@@ -45,11 +47,22 @@ impl TransactionBase {
     fn common_fields(&self) -> Vec<Field<'_>> {
         vec![
             Field::Date(self.operation_date),
-            Field::AlphaNumber { value: &self.operation_code },
-            self.operation_fees.as_ref().map_or(Field::Empty, |fees| 
-                Field::DecimalNumber { value: fees, precision: 2 }),
-            Field::AlphaNumber { value: &self.crypto_symbol },
-            Field::DecimalNumber { value: &self.crypto_amount, precision: 10 },
+            Field::AlphaNumber {
+                value: &self.operation_code,
+            },
+            self.operation_fees
+                .as_ref()
+                .map_or(Field::Empty, |fees| Field::DecimalNumber {
+                    value: fees,
+                    precision: 2,
+                }),
+            Field::AlphaNumber {
+                value: &self.crypto_symbol,
+            },
+            Field::DecimalNumber {
+                value: &self.crypto_amount,
+                precision: 10,
+            },
         ]
     }
 }
@@ -161,76 +174,139 @@ impl Transaction {
     pub fn write_transaction<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         let fields = match self {
             Transaction::Purchase(t) => {
-                let mut fields = vec![Field::AlphaNumber { value: self.record_type() },
+                let mut fields = vec![
+                    Field::AlphaNumber {
+                        value: self.record_type(),
+                    },
                     Field::Date(t.base.operation_date),
-                    Field::AlphaNumber { value: &t.base.operation_code },
-                    Field::DecimalNumber { value: &t.operation_value, precision: 2 },
-                    t.base.operation_fees.as_ref().map_or(Field::Empty, |fees| 
-                        Field::DecimalNumber { value: fees, precision: 2 }),
-                    Field::AlphaNumber { value: &t.base.crypto_symbol },
-                    Field::DecimalNumber { value: &t.base.crypto_amount, precision: 10 },
+                    Field::AlphaNumber {
+                        value: &t.base.operation_code,
+                    },
+                    Field::DecimalNumber {
+                        value: &t.operation_value,
+                        precision: 2,
+                    },
+                    t.base.operation_fees.as_ref().map_or(Field::Empty, |fees| {
+                        Field::DecimalNumber {
+                            value: fees,
+                            precision: 2,
+                        }
+                    }),
+                    Field::AlphaNumber {
+                        value: &t.base.crypto_symbol,
+                    },
+                    Field::DecimalNumber {
+                        value: &t.base.crypto_amount,
+                        precision: 10,
+                    },
                 ];
                 fields.extend(t.buyer_exchange.fields());
                 fields
-            },
+            }
             Transaction::Sale(t) => {
-                let mut fields = vec![Field::AlphaNumber { value: self.record_type() },
+                let mut fields = vec![
+                    Field::AlphaNumber {
+                        value: self.record_type(),
+                    },
                     Field::Date(t.base.operation_date),
-                    Field::AlphaNumber { value: &t.base.operation_code },
-                    Field::DecimalNumber { value: &t.operation_value, precision: 2 },
-                    t.base.operation_fees.as_ref().map_or(Field::Empty, |fees| 
-                        Field::DecimalNumber { value: fees, precision: 2 }),
-                    Field::AlphaNumber { value: &t.base.crypto_symbol },
-                    Field::DecimalNumber { value: &t.base.crypto_amount, precision: 12 },
+                    Field::AlphaNumber {
+                        value: &t.base.operation_code,
+                    },
+                    Field::DecimalNumber {
+                        value: &t.operation_value,
+                        precision: 2,
+                    },
+                    t.base.operation_fees.as_ref().map_or(Field::Empty, |fees| {
+                        Field::DecimalNumber {
+                            value: fees,
+                            precision: 2,
+                        }
+                    }),
+                    Field::AlphaNumber {
+                        value: &t.base.crypto_symbol,
+                    },
+                    Field::DecimalNumber {
+                        value: &t.base.crypto_amount,
+                        precision: 12,
+                    },
                 ];
                 fields.extend(t.seller_exchange.fields());
                 fields
-            },
+            }
             Transaction::Swap(t) => {
-                let mut fields = vec![Field::AlphaNumber { value: self.record_type() },
+                let mut fields = vec![
+                    Field::AlphaNumber {
+                        value: self.record_type(),
+                    },
                     Field::Date(t.base.operation_date),
-                    Field::AlphaNumber { value: &t.base.operation_code },
-                    t.base.operation_fees.as_ref().map_or(Field::Empty, |fees| 
-                        Field::DecimalNumber { value: fees, precision: 2 }),
-                    Field::AlphaNumber { value: &t.received_crypto_symbol },
-                    Field::DecimalNumber { value: &t.received_crypto_amount, precision: 10 },
-                    Field::AlphaNumber { value: &t.given_crypto_symbol },
-                    Field::DecimalNumber { value: &t.given_crypto_amount, precision: 10 },
+                    Field::AlphaNumber {
+                        value: &t.base.operation_code,
+                    },
+                    t.base.operation_fees.as_ref().map_or(Field::Empty, |fees| {
+                        Field::DecimalNumber {
+                            value: fees,
+                            precision: 2,
+                        }
+                    }),
+                    Field::AlphaNumber {
+                        value: &t.received_crypto_symbol,
+                    },
+                    Field::DecimalNumber {
+                        value: &t.received_crypto_amount,
+                        precision: 10,
+                    },
+                    Field::AlphaNumber {
+                        value: &t.given_crypto_symbol,
+                    },
+                    Field::DecimalNumber {
+                        value: &t.given_crypto_amount,
+                        precision: 10,
+                    },
                 ];
                 fields.extend(t.exchange.fields());
                 fields
-            },
+            }
             Transaction::TransferToExchange(t) => {
-                let mut fields = vec![Field::AlphaNumber { value: self.record_type() }];
+                let mut fields = vec![Field::AlphaNumber {
+                    value: self.record_type(),
+                }];
                 fields.extend(t.base.common_fields());
                 fields.extend(vec![
-                    t.origin_wallet.as_ref().map_or(Field::Empty, |w| 
-                        Field::AlphaNumber { value: w }),
-                    t.origin_exchange_name.as_ref().map_or(Field::Empty, |n| 
-                        Field::AlphaNumber { value: n }),
+                    t.origin_wallet
+                        .as_ref()
+                        .map_or(Field::Empty, |w| Field::AlphaNumber { value: w }),
+                    t.origin_exchange_name
+                        .as_ref()
+                        .map_or(Field::Empty, |n| Field::AlphaNumber { value: n }),
                 ]);
                 fields
-            },
+            }
             Transaction::WithdrawalFromExchange(t) => {
-                let mut fields = vec![Field::AlphaNumber { value: self.record_type() }];
+                let mut fields = vec![Field::AlphaNumber {
+                    value: self.record_type(),
+                }];
                 fields.extend(t.base.common_fields());
                 fields.extend(t.origin_exchange.fields());
                 fields
-            },
+            }
             Transaction::CryptoPaymentReceiver(t) => {
-                let mut fields = vec![Field::AlphaNumber { value: self.record_type() }];
+                let mut fields = vec![Field::AlphaNumber {
+                    value: self.record_type(),
+                }];
                 fields.extend(t.base.common_fields());
                 fields.extend(t.receiver_exchange.fields());
                 fields
-            },
+            }
             Transaction::CryptoPaymentSender(t) => {
-                let mut fields = vec![Field::AlphaNumber { value: self.record_type() }];
+                let mut fields = vec![Field::AlphaNumber {
+                    value: self.record_type(),
+                }];
                 fields.extend(t.base.common_fields());
                 fields.extend(t.sender_exchange.fields());
                 fields
-            },
+            }
         };
 
         write_register_row(writer, &fields)
     }
-} 
+}

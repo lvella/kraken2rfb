@@ -1,34 +1,19 @@
-use chrono::{NaiveDate, TimeZone, Utc};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use chrono::NaiveDate;
 use hmac::{Hmac, Mac};
+use phf::phf_set;
 use reqwest::blocking::Client;
 use reqwest::header::HeaderMap;
 use rust_decimal::Decimal;
-use rust_decimal_macros::dec;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use sha2::{Sha256, Sha512, Digest};
+use serde_json::Value;
+use serde_urlencoded;
+use sha2::{Digest, Sha256, Sha512};
 use std::collections::BTreeMap;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use serde_urlencoded;
-use phf::phf_set;
 
 type HmacSha512 = Hmac<Sha512>;
-
-static FIAT_CURRENCIES: phf::Set<&'static str> = phf_set! {
-    "USD", "ZUSD",
-    "EUR", "ZEUR",
-    "GBP", "ZGBP",
-    "JPY", "ZJPY",
-    "CAD", "ZCAD",
-    "AUD", "ZAUD",
-    "MXN", "ZMXN",
-    "CHF", "ZCHF",
-    "BRL", "ZBRL",
-    "ARS", "ZARS",
-    "AED", "ZAED",
-};
 
 #[derive(Serialize, Deserialize)]
 struct ApiKeys {
@@ -42,36 +27,31 @@ fn load_api_keys(path: &str) -> ApiKeys {
 }
 
 fn get_timestamp(date: NaiveDate) -> u64 {
-    date.and_hms_opt(0, 0, 0)
-        .unwrap()
-        .timestamp() as u64
+    date.and_hms_opt(0, 0, 0).unwrap().timestamp() as u64
 }
 
 // Kraken API signature
-fn kraken_signature(
-    uri_path: &str,
-    data: &BTreeMap<&str, String>,
-    secret: &str,
-) -> String {
+fn kraken_signature(uri_path: &str, data: &BTreeMap<&str, String>, secret: &str) -> String {
     // Get nonce from data
     let nonce = data.get("nonce").expect("nonce is required");
-    
+
     // Create the encoded data string (nonce + urlencoded data)
     let encoded_data = format!("{}{}", nonce, serde_urlencoded::to_string(data).unwrap());
-    
+
     // Create the message (uri_path + sha256(encoded_data))
     let mut hasher = Sha256::new();
     hasher.update(encoded_data.as_bytes());
     let hash = hasher.finalize();
-    
+
     let mut message = uri_path.as_bytes().to_vec();
     message.extend_from_slice(&hash);
-    
+
     // Create HMAC-SHA512
     let decoded_secret = BASE64.decode(secret).expect("Base64 decode failed");
-    let mut mac = Hmac::<Sha512>::new_from_slice(&decoded_secret).expect("HMAC can take key of any size");
+    let mut mac =
+        Hmac::<Sha512>::new_from_slice(&decoded_secret).expect("HMAC can take key of any size");
     mac.update(&message);
-    
+
     // Return base64 encoded signature
     BASE64.encode(mac.finalize().into_bytes())
 }
@@ -84,7 +64,13 @@ fn kraken_private_request(
     params: &mut BTreeMap<&str, String>,
 ) -> Value {
     let url = format!("https://api.kraken.com{}", uri_path);
-    let nonce = format!("{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis());
+    let nonce = format!(
+        "{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    );
     params.insert("nonce", nonce);
 
     let signature = kraken_signature(uri_path, params, &api_keys.secret);
@@ -125,18 +111,17 @@ pub fn fetch_kraken_activity(
     let mut params = BTreeMap::new();
     params.insert("start", start_ts.to_string());
     params.insert("end", end_ts.to_string());
-    let deposits_json = kraken_private_request(
-        &client,
-        &api_keys,
-        "/0/private/DepositStatus",
-        &mut params,
-    );
+    let deposits_json =
+        kraken_private_request(&client, &api_keys, "/0/private/DepositStatus", &mut params);
     let mut deposits: Vec<Value> = deposits_json
         .as_array()
         .unwrap()
         .iter()
         .filter(|entry| {
-            entry["time"].as_u64().map(|ts| ts >= start_ts && ts <= end_ts).unwrap()
+            entry["time"]
+                .as_u64()
+                .map(|ts| ts >= start_ts && ts <= end_ts)
+                .unwrap()
         })
         .cloned()
         .collect();
@@ -145,18 +130,17 @@ pub fn fetch_kraken_activity(
     let mut params = BTreeMap::new();
     params.insert("start", start_ts.to_string());
     params.insert("end", end_ts.to_string());
-    let withdrawals_json = kraken_private_request(
-        &client,
-        &api_keys,
-        "/0/private/WithdrawStatus",
-        &mut params,
-    );
+    let withdrawals_json =
+        kraken_private_request(&client, &api_keys, "/0/private/WithdrawStatus", &mut params);
     let mut withdrawals: Vec<Value> = withdrawals_json
         .as_array()
         .unwrap()
         .iter()
         .filter(|entry| {
-            entry["time"].as_u64().map(|ts| ts >= start_ts && ts <= end_ts).unwrap()
+            entry["time"]
+                .as_u64()
+                .map(|ts| ts >= start_ts && ts <= end_ts)
+                .unwrap()
         })
         .cloned()
         .collect();
@@ -165,12 +149,8 @@ pub fn fetch_kraken_activity(
     let mut params = BTreeMap::new();
     params.insert("start", start_ts.to_string());
     params.insert("end", end_ts.to_string());
-    let trades_json = kraken_private_request(
-        &client,
-        &api_keys,
-        "/0/private/TradesHistory",
-        &mut params,
-    );
+    let trades_json =
+        kraken_private_request(&client, &api_keys, "/0/private/TradesHistory", &mut params);
     let mut trades: Vec<Value> = trades_json["trades"]
         .as_object()
         .unwrap()
@@ -185,11 +165,24 @@ pub fn fetch_kraken_activity(
     // Sort all by time ascending
     deposits.sort_by_key(|v| v["time"].as_u64().unwrap());
     withdrawals.sort_by_key(|v| v["time"].as_u64().unwrap());
-    trades.sort_by_key(|v|to_decimal(&v["time"]));
+    trades.sort_by_key(|v| to_decimal(&v["time"]));
 
     (deposits, withdrawals, trades)
 }
 
 pub fn is_fiat(ticker: &str) -> bool {
+    static FIAT_CURRENCIES: phf::Set<&'static str> = phf_set! {
+        "USD", "ZUSD",
+        "EUR", "ZEUR",
+        "GBP", "ZGBP",
+        "JPY", "ZJPY",
+        "CAD", "ZCAD",
+        "AUD", "ZAUD",
+        "MXN", "ZMXN",
+        "CHF", "ZCHF",
+        "BRL", "ZBRL",
+        "ARS", "ZARS",
+        "AED", "ZAED",
+    };
     FIAT_CURRENCIES.contains(ticker.to_uppercase().as_str())
 }

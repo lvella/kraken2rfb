@@ -1,10 +1,10 @@
 use chrono::{Local, NaiveDate};
 use reqwest::blocking::Client;
-use serde::Deserialize;
-use std::error::Error;
-use serde_json;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::*;
+use serde::Deserialize;
+use serde_json;
+use std::error::Error;
 
 #[derive(Debug, Deserialize)]
 struct BCBValue {
@@ -19,8 +19,7 @@ where
     D: serde::Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    NaiveDate::parse_from_str(&s, "%d/%m/%Y")
-        .map_err(serde::de::Error::custom)
+    NaiveDate::parse_from_str(&s, "%d/%m/%Y").map_err(serde::de::Error::custom)
 }
 
 fn deserialize_decimal<'de, D>(deserializer: D) -> Result<Decimal, D::Error>
@@ -33,32 +32,32 @@ where
 
 fn get_currency_series_code(code: &str) -> Option<&'static str> {
     match code {
-        "USD" => Some("1"),           // Dólar Comercial (venda)
-        "EUR" => Some("21619"),       // Euro (venda)
-        "JPY" => Some("21621"),       // Iene (venda)
-        "GBP" => Some("21623"),       // Libra esterlina (venda)
-        "CHF" => Some("21625"),       // Franco Suíço (venda)
-        "DKK" => Some("21627"),       // Coroa Dinamarquesa (venda)
-        "NOK" => Some("21629"),       // Coroa Norueguesa (venda)
-        "SEK" => Some("21631"),       // Coroa Sueca (venda)
-        "AUD" => Some("21633"),       // Dólar Australiano (venda)
-        "CAD" => Some("21635"),       // Dólar Canadense (venda)
+        "USD" => Some("1"),     // Dólar Comercial (venda)
+        "EUR" => Some("21619"), // Euro (venda)
+        "JPY" => Some("21621"), // Iene (venda)
+        "GBP" => Some("21623"), // Libra esterlina (venda)
+        "CHF" => Some("21625"), // Franco Suíço (venda)
+        "DKK" => Some("21627"), // Coroa Dinamarquesa (venda)
+        "NOK" => Some("21629"), // Coroa Norueguesa (venda)
+        "SEK" => Some("21631"), // Coroa Sueca (venda)
+        "AUD" => Some("21633"), // Dólar Australiano (venda)
+        "CAD" => Some("21635"), // Dólar Canadense (venda)
         _ => None,
     }
 }
 
 /// Fetches the exchange rate from BCB for a given date and currency code.
 /// If the requested date is not a bank day, returns the most recent available rate.
-/// 
+///
 /// # Arguments
 /// * `date` - The date to fetch the exchange rate for
 /// * `currency_code` - The currency code (e.g., "USD", "EUR", "JPY")
-/// 
+///
 /// # Returns
 /// A tuple containing:
 /// * The actual date of the exchange rate (which might be the first bank day before the supplied date)
 /// * The exchange rate as a Decimal for maximum precision
-/// 
+///
 /// # Errors
 /// Returns an error if:
 /// * The date is in the future
@@ -66,9 +65,12 @@ fn get_currency_series_code(code: &str) -> Option<&'static str> {
 /// * The response cannot be parsed
 /// * The currency code is not supported
 /// * No exchange rate data is available within the last 7 days
-pub fn get_exchange_rate(date: NaiveDate, currency_code: &str) -> Result<(NaiveDate, Decimal), Box<dyn Error>> {
+pub fn get_exchange_rate(
+    date: NaiveDate,
+    currency_code: &str,
+) -> Result<(NaiveDate, Decimal), Box<dyn Error>> {
     let today = Local::now().date_naive();
-    
+
     if date > today {
         return Err("Cannot fetch exchange rate for future dates".into());
     }
@@ -89,9 +91,13 @@ pub fn get_exchange_rate(date: NaiveDate, currency_code: &str) -> Result<(NaiveD
     let resp = client.get(&url).send()?;
     let text = resp.text()?;
     let mut response: Vec<BCBValue> = serde_json::from_str(&text)?;
-    
+
     if response.is_empty() {
-        return Err(format!("No exchange rate data available for {} within the last 7 days of {}", currency_code, date).into());
+        return Err(format!(
+            "No exchange rate data available for {} within the last 7 days of {}",
+            currency_code, date
+        )
+        .into());
     }
 
     // Sort by date in descending order to get the most recent rate
@@ -111,7 +117,7 @@ mod tests {
         let date = NaiveDate::from_ymd_opt(2024, 3, 1).unwrap();
         println!("\nTesting exchange rates for {}:", date);
         println!("----------------------------------------");
-        
+
         for (code, series) in [
             ("USD", "1"),
             ("EUR", "21619"),
@@ -138,7 +144,12 @@ mod tests {
         let date = NaiveDate::from_ymd_opt(2024, 3, 1).unwrap();
         let result = get_exchange_rate(date, "INVALID");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unsupported currency code"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unsupported currency code")
+        );
     }
 
     #[test]
@@ -146,7 +157,12 @@ mod tests {
         let future_date = Local::now().date_naive() + chrono::Duration::days(1);
         let result = get_exchange_rate(future_date, "USD");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Cannot fetch exchange rate for future dates"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Cannot fetch exchange rate for future dates")
+        );
     }
 
     #[test]
@@ -154,12 +170,12 @@ mod tests {
         // March 2, 2024 is a Saturday
         let weekend_date = NaiveDate::from_ymd_opt(2024, 3, 2).unwrap();
         let result = get_exchange_rate(weekend_date, "USD").unwrap();
-        
+
         // The rate should be from the previous business day (March 1, 2024)
         assert_eq!(result.0, NaiveDate::from_ymd_opt(2024, 3, 1).unwrap());
-        
+
         // The rate should be positive and reasonable
         assert!(result.1 > Decimal::ZERO);
         assert!(result.1 < dec!(10));
     }
-} 
+}
