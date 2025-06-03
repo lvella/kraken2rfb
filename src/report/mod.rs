@@ -94,9 +94,10 @@ pub fn process_kraken_data(
     for trade in trades {
         let pair = trade["pair"].as_str().unwrap();
         let (base, quote) = parse_trading_pair(pair);
-        let amount = trade["vol"].as_str().unwrap().parse::<Decimal>().unwrap();
-        let price = trade["cost"].as_str().unwrap().parse::<Decimal>().unwrap();
-        let fee = trade["fee"].as_str().unwrap().parse::<Decimal>().unwrap();
+        let vol = trade["vol"].as_str().unwrap().parse::<Decimal>().unwrap(); // QUOTE amount
+        let cost = trade["cost"].as_str().unwrap().parse::<Decimal>().unwrap(); // BASE amount
+        let fee = trade["fee"].as_str().unwrap().parse::<Decimal>().unwrap(); // BASE amount
+        let price = trade["price"].as_str().unwrap().parse::<Decimal>().unwrap(); // BASE / QUOTE
         let time = DateTime::from_timestamp(int_part(to_decimal(&trade["time"])), 0)
             .unwrap()
             .date_naive();
@@ -105,8 +106,10 @@ pub fn process_kraken_data(
         match (is_fiat(base), is_fiat(quote)) {
             // Crypto-Fiat trade
             (false, true) => {
-                let operation_value = price;
-                let (_rate_date, rate) = get_exchange_rate(time, quote).unwrap_or_else(|e| {
+                // Calculate net amounts (after fees)
+                let operation_value = cost - fee; // BASE amount
+                let crypto_amount = vol - (fee / price); // QUOTE amount
+                let (_rate_date, brl_rate /* BRL / BASE */) = get_exchange_rate(time, quote).unwrap_or_else(|e| {
                     panic!(
                         "Failed to get exchange rate for {} on {}: {}",
                         quote, time, e
@@ -118,11 +121,11 @@ pub fn process_kraken_data(
                         let purchase = Transaction::Purchase(PurchaseTransaction {
                             base: TransactionBase {
                                 operation_date: time,
-                                operation_fees: Some(fee * rate),
+                                operation_fees: Some(fee * brl_rate),
                                 crypto_symbol: base.to_string(),
-                                crypto_amount: amount,
+                                crypto_amount,
                             },
-                            operation_value: operation_value * rate,
+                            operation_value: operation_value * brl_rate,
                             buyer_exchange: kraken_exchange_info(),
                         });
                         transactions.push(purchase);
@@ -131,11 +134,11 @@ pub fn process_kraken_data(
                         let sale = Transaction::Sale(SaleTransaction {
                             base: TransactionBase {
                                 operation_date: time,
-                                operation_fees: Some(fee * rate),
+                                operation_fees: Some(fee * brl_rate),
                                 crypto_symbol: base.to_string(),
-                                crypto_amount: amount,
+                                crypto_amount,
                             },
-                            operation_value: operation_value * rate,
+                            operation_value: operation_value * brl_rate,
                             seller_exchange: kraken_exchange_info(),
                         });
                         transactions.push(sale);
