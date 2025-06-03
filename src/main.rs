@@ -4,6 +4,13 @@ mod report;
 
 use chrono::NaiveDate;
 use kraken::fetch_kraken_activity;
+use report::process_kraken_data;
+use serde_json::Value;
+use rust_decimal::Decimal;
+
+fn to_decimal(value: &Value) -> Decimal {
+    Decimal::try_from(value.as_number().unwrap().as_str()).unwrap()
+}
 
 fn main() {
     let (deposits, withdrawals, trades) = fetch_kraken_activity(
@@ -14,4 +21,7 @@ fn main() {
     println!("Deposits: {:#?}", deposits);
     println!("Withdrawals: {:#?}", withdrawals);
     println!("Trades: {:#?}", trades);
+
+    let transactions = process_kraken_data(deposits, withdrawals, trades);
+    println!("============\nTransactions: {:#?}", transactions);
 }

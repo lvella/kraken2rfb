@@ -13,6 +13,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::to_decimal;
+
 type HmacSha512 = Hmac<Sha512>;
 
 #[derive(Serialize, Deserialize)]
@@ -90,10 +92,6 @@ fn kraken_private_request(
         panic!("Kraken error: {:?}", json["error"]);
     }
     json["result"].clone()
-}
-
-fn to_decimal(value: &Value) -> Decimal {
-    Decimal::try_from(value.as_number().unwrap().as_str()).unwrap()
 }
 
 pub fn fetch_kraken_activity(
