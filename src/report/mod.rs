@@ -109,12 +109,13 @@ pub fn process_kraken_data(
                 // Calculate net amounts (after fees)
                 let operation_value = cost - fee; // BASE amount
                 let crypto_amount = vol - (fee / price); // QUOTE amount
-                let (_rate_date, brl_rate /* BRL / BASE */) = get_exchange_rate(time, quote).unwrap_or_else(|e| {
-                    panic!(
-                        "Failed to get exchange rate for {} on {}: {}",
-                        quote, time, e
-                    )
-                });
+                let (_rate_date, brl_rate /* BRL / BASE */) = get_exchange_rate(time, quote)
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "Failed to get exchange rate for {} on {}: {}",
+                            quote, time, e
+                        )
+                    });
 
                 match trade_type {
                     "buy" => {
@@ -167,20 +168,23 @@ pub fn process_kraken_data(
 fn parse_trading_pair(pair: &str) -> (&str, &str) {
     // Remove any prefix like "X" or "Z" from the pair
     let clean_pair = pair.trim_start_matches(|c| c == 'X' || c == 'Z');
-    
+
     // Find the first position where we have a known fiat currency
-    let fiat_positions = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "BRL", "ARS", "AED"];
+    let fiat_positions = [
+        "USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "BRL", "ARS", "AED",
+    ];
     let mut split_pos = None;
-    
+
     for fiat in fiat_positions {
         if let Some(pos) = clean_pair.find(fiat) {
-            if pos > 0 {  // Only split if the fiat is not at the start
+            if pos > 0 {
+                // Only split if the fiat is not at the start
                 split_pos = Some(pos);
                 break;
             }
         }
     }
-    
+
     // If we found a fiat currency, split there
     if let Some(pos) = split_pos {
         let (base, quote) = clean_pair.split_at(pos);
