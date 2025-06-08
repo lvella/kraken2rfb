@@ -88,8 +88,10 @@ pub struct SaleTransaction {
 /// Registro 0210: Registra as operações de permuta
 #[derive(Debug)]
 pub struct SwapTransaction {
-    /// Base fields common to all transactions
-    pub base: TransactionBase,
+    /// Data da operação no formato DDMMAAAA
+    pub operation_date: NaiveDate,
+    /// Valor das taxas em reais, cobradas na operação
+    pub operation_fees: Option<Decimal>,
     /// Símbolo do criptoativo recebido
     pub received_crypto_symbol: String,
     /// Quantidade de criptoativos recebidos
@@ -225,14 +227,14 @@ impl Transaction {
             Transaction::Swap(t) => {
                 let mut fields = vec![
                     Field::AlphaNumber { value: record_type },
-                    Field::Date(t.base.operation_date),
+                    Field::Date(t.operation_date),
                     Field::AlphaNumber { value: record_code },
-                    t.base.operation_fees.as_ref().map_or(Field::Empty, |fees| {
-                        Field::DecimalNumber {
+                    t.operation_fees
+                        .as_ref()
+                        .map_or(Field::Empty, |fees| Field::DecimalNumber {
                             value: fees,
                             precision: 2,
-                        }
-                    }),
+                        }),
                     Field::AlphaNumber {
                         value: &t.received_crypto_symbol,
                     },

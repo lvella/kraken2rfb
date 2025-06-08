@@ -75,11 +75,25 @@ pub fn process_kraken_data(
                 .unwrap()
                 .date_naive();
 
+            // Convert fee from crypto to BRL
+            let (_rate_date, brl_rate) = get_exchange_rate(time, asset).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to get exchange rate for {} on {}: {}",
+                    asset, time, e
+                )
+            });
+
+            println!("### Withdrawal asset: {asset}");
+            println!(
+                "### Original fee: {fee} {asset}, converted fee: {} BRL",
+                fee * brl_rate
+            );
+
             let withdrawal =
                 Transaction::WithdrawalFromExchange(WithdrawalFromExchangeTransaction {
                     base: TransactionBase {
                         operation_date: time,
-                        operation_fees: Some(fee),
+                        operation_fees: Some(fee * brl_rate),
                         crypto_symbol: asset.to_string(),
                         crypto_amount: amount,
                     },
@@ -94,28 +108,39 @@ pub fn process_kraken_data(
     for trade in trades {
         let pair = trade["pair"].as_str().unwrap();
         let (base, quote) = parse_trading_pair(pair);
-        let vol = trade["vol"].as_str().unwrap().parse::<Decimal>().unwrap(); // QUOTE amount
-        let cost = trade["cost"].as_str().unwrap().parse::<Decimal>().unwrap(); // BASE amount
-        let fee = trade["fee"].as_str().unwrap().parse::<Decimal>().unwrap(); // BASE amount
-        let price = trade["price"].as_str().unwrap().parse::<Decimal>().unwrap(); // BASE / QUOTE
+        let vol = trade["vol"].as_str().unwrap().parse::<Decimal>().unwrap(); // BASE amount
+        let cost = trade["cost"].as_str().unwrap().parse::<Decimal>().unwrap(); // QUOTE amount
+        let fee = trade["fee"].as_str().unwrap().parse::<Decimal>().unwrap(); // QUOTE amount
+        let price = trade["price"].as_str().unwrap().parse::<Decimal>().unwrap(); // QUOTE / BASE
         let time = DateTime::from_timestamp(int_part(to_decimal(&trade["time"])), 0)
             .unwrap()
             .date_naive();
         let trade_type = trade["type"].as_str().unwrap();
 
+        println!("### Trade pair: {pair}");
+
         match (is_fiat(base), is_fiat(quote)) {
             // Crypto-Fiat trade
             (false, true) => {
                 // Calculate net amounts (after fees)
-                let operation_value = cost - fee; // BASE amount
-                let crypto_amount = vol - (fee / price); // QUOTE amount
-                let (_rate_date, brl_rate /* BRL / BASE */) = get_exchange_rate(time, quote)
+                let operation_value = cost - fee; // QUOTE amount
+                let crypto_amount = vol - (fee / price); // BASE amount
+                let (_rate_date, brl_rate /* BRL / QUOTE */) = get_exchange_rate(time, quote)
                     .unwrap_or_else(|e| {
                         panic!(
                             "Failed to get exchange rate for {} on {}: {}",
                             quote, time, e
                         )
                     });
+
+                println!(
+                    "### Original fee: {fee} {quote}, converted fee: {} BRL",
+                    fee * brl_rate
+                );
+                println!(
+                    "### Operation value: {operation_value} {quote}, converted value: {} BRL",
+                    operation_value * brl_rate
+                );
 
                 match trade_type {
                     "buy" => {
@@ -149,7 +174,43 @@ pub fn process_kraken_data(
             }
             // Crypto-Crypto trade
             (false, false) => {
-                panic!("We don't have the exchange rate to convert the fee to BRL");
+                // Convert fee to BRL using the base currency rate
+                let (_rate_date, base_brl_rate) =
+                    get_exchange_rate(time, base).unwrap_or_else(|e| {
+                        panic!(
+                            "Failed to get exchange rate for {} on {}: {}",
+                            base, time, e
+                        )
+                    });
+
+                let operation_fees = Some(fee * base_brl_rate);
+                println!("### Original fee: {fee} {quote}, converted fee: {operation_fees:?} BRL");
+                let exchange = kraken_exchange_info();
+
+                let swap = Transaction::Swap(if trade_type == "buy" {
+                    SwapTransaction {
+                        operation_date: time,
+                        operation_fees,
+                        received_crypto_symbol: base.to_string(),
+                        received_crypto_amount: vol,
+                        given_crypto_symbol: quote.to_string(),
+                        given_crypto_amount: cost,
+                        exchange,
+                    }
+                } else if trade_type == "sell" {
+                    SwapTransaction {
+                        operation_date: time,
+                        operation_fees,
+                        received_crypto_symbol: quote.to_string(),
+                        received_crypto_amount: cost,
+                        given_crypto_symbol: base.to_string(),
+                        given_crypto_amount: vol,
+                        exchange,
+                    }
+                } else {
+                    panic!("Unknown trade type: {}", trade_type);
+                });
+                transactions.push(swap);
             }
             // Fiat-Crypto trade (should be handled by the other case)
             (true, false) => {

@@ -5,8 +5,8 @@ mod report;
 use chrono::NaiveDate;
 use kraken::fetch_kraken_activity;
 use report::process_kraken_data;
-use serde_json::Value;
 use rust_decimal::Decimal;
+use serde_json::Value;
 
 fn to_decimal(value: &Value) -> Decimal {
     Decimal::try_from(value.as_number().unwrap().as_str()).unwrap()
