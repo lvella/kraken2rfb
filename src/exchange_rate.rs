@@ -76,8 +76,6 @@ static CURRENCY_TO_BCB_SERIES: phf::Map<&'static str, &'static str> = phf_map! {
 #[derive(Debug, Deserialize)]
 struct CoinGeckoMarketData {
     current_price: HashMap<String, f64>,
-    #[serde(default)]
-    last_updated: String,
 }
 
 #[derive(Debug, Deserialize)]

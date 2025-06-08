@@ -15,8 +15,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::to_decimal;
 
-type HmacSha512 = Hmac<Sha512>;
-
 #[derive(Serialize, Deserialize)]
 struct ApiKeys {
     key: String,
@@ -29,7 +27,7 @@ fn load_api_keys(path: &str) -> ApiKeys {
 }
 
 fn get_timestamp(date: NaiveDate) -> u64 {
-    date.and_hms_opt(0, 0, 0).unwrap().timestamp() as u64
+    date.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp() as u64
 }
 
 // Kraken API signature

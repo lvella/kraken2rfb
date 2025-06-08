@@ -1,8 +1,11 @@
 pub mod encoding;
 pub mod transactions;
 
+use std::fs::File;
+use std::io::BufWriter;
+
 use crate::kraken::is_fiat;
-use crate::{exchange_rate::get_exchange_rate, to_decimal};
+use crate::{exchange_rate::get_exchange_rate, kraken_pairs, to_decimal};
 use chrono::DateTime;
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -107,7 +110,7 @@ pub fn process_kraken_data(
     // Process trades
     for trade in trades {
         let pair = trade["pair"].as_str().unwrap();
-        let (base, quote) = parse_trading_pair(pair);
+        let (base, quote) = kraken_pairs::parse_pair(pair).unwrap();
         let vol = trade["vol"].as_str().unwrap().parse::<Decimal>().unwrap(); // BASE amount
         let cost = trade["cost"].as_str().unwrap().parse::<Decimal>().unwrap(); // QUOTE amount
         let fee = trade["fee"].as_str().unwrap().parse::<Decimal>().unwrap(); // QUOTE amount
@@ -225,40 +228,14 @@ pub fn process_kraken_data(
     transactions
 }
 
-/// Parse a Kraken trading pair into base and quote currencies
-fn parse_trading_pair(pair: &str) -> (&str, &str) {
-    // Remove any prefix like "X" or "Z" from the pair
-    let clean_pair = pair.trim_start_matches(|c| c == 'X' || c == 'Z');
+pub fn generate_report(transactions: Vec<Transaction>, out_file: &str) -> std::io::Result<()> {
+    let mut file = BufWriter::new(File::create(out_file)?);
 
-    // Find the first position where we have a known fiat currency
-    let fiat_positions = [
-        "USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "BRL", "ARS", "AED",
-    ];
-    let mut split_pos = None;
-
-    for fiat in fiat_positions {
-        if let Some(pos) = clean_pair.find(fiat) {
-            if pos > 0 {
-                // Only split if the fiat is not at the start
-                split_pos = Some(pos);
-                break;
-            }
-        }
+    for transaction in transactions {
+        transaction.write_transaction(&mut file)?;
     }
 
-    // If we found a fiat currency, split there
-    if let Some(pos) = split_pos {
-        let (base, quote) = clean_pair.split_at(pos);
-        (base, quote)
-    } else {
-        // If no fiat found, assume the first 3-4 characters are the base
-        // This handles cases like USDT, USDC, etc.
-        if clean_pair.starts_with("USDT") || clean_pair.starts_with("USDC") {
-            clean_pair.split_at(4)
-        } else {
-            clean_pair.split_at(3)
-        }
-    }
+    Ok(())
 }
 
 /// Get the integer part of a Decimal
