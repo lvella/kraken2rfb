@@ -225,6 +225,7 @@ pub fn process_kraken_data(
         }
     }
 
+    transactions.sort_unstable_by_key(|t| t.record_type().0);
     transactions
 }
 
