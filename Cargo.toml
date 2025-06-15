@@ -1,7 +1,11 @@
 [package]
-name = "bcb_exchange_report"
+name = "kraken2rfb"
+description = "A tool for generating RFB reports from Kraken data"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/lvella/kraken2rfb"
 
 [dependencies]
 chrono = "0.4.41"
