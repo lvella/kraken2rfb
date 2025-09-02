@@ -33,6 +33,7 @@ use serde::Deserialize;
 use serde_json;
 use std::collections::HashMap;
 use std::error::Error;
+use std::result;
 
 #[derive(Debug, Deserialize)]
 struct BCBValue {
@@ -233,7 +234,7 @@ fn get_fiat_exchange_rate(
 /// * The API request fails
 /// * The asset code is not supported
 /// * No exchange rate data is available
-pub fn get_exchange_rate(
+fn get_exchange_rate_impl(
     date: NaiveDate,
     asset_code: &str,
 ) -> Result<(NaiveDate, Decimal), Box<dyn Error>> {
@@ -252,6 +253,20 @@ pub fn get_exchange_rate(
     };
 
     get_crypto_rate_historical(coingecko_id, date)
+}
+
+pub fn get_exchange_rate(
+    date: NaiveDate,
+    asset_code: &str,
+) -> Result<(NaiveDate, Decimal), Box<dyn Error>> {
+    let result = get_exchange_rate_impl(date, asset_code);
+    if let Ok((rate_date, rate)) = &result {
+        println!(
+            "Exchange rate for {} on {} (actual used date {}): {} BRL",
+            asset_code, date, rate_date, rate
+        );
+    }
+    result
 }
 
 #[cfg(test)]

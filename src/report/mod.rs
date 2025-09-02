@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::BufWriter;
 
 use crate::kraken::is_fiat;
+use crate::kraken_symbols::get_common_symbol;
 use crate::{exchange_rate::get_exchange_rate, kraken_pairs, to_decimal};
 use chrono::DateTime;
 use rust_decimal::Decimal;
@@ -33,7 +34,7 @@ pub fn process_kraken_data(
 
     // Process deposits (only non-fiat)
     for deposit in deposits {
-        let asset = deposit["asset"].as_str().unwrap();
+        let asset = get_common_symbol(deposit["asset"].as_str().unwrap()).unwrap();
         if !is_fiat(asset) {
             let amount = deposit["amount"]
                 .as_str()
@@ -62,7 +63,7 @@ pub fn process_kraken_data(
 
     // Process withdrawals (only non-fiat)
     for withdrawal in withdrawals {
-        let asset = withdrawal["asset"].as_str().unwrap();
+        let asset = get_common_symbol(withdrawal["asset"].as_str().unwrap()).unwrap();
         if !is_fiat(asset) {
             let amount = withdrawal["amount"]
                 .as_str()

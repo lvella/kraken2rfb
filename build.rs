@@ -33,8 +33,34 @@ fn main() {
     let pairs_json: serde_json::Value =
         serde_json::from_str(&pairs_content).expect("Failed to parse kraken_pairs.json");
 
-    // Generate PHF map entries
-    let mut phf_entries = Vec::new();
+    // Generate asset name PHF map entries
+    let mut asset_phf_entries = Vec::new();
+    for (kraken_name, common_name) in &asset_altnames {
+        asset_phf_entries.push(format!("    \"{}\" => \"{}\",", kraken_name, common_name));
+    }
+
+    // Write the generated pair PHF code to a file
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let dest_path = Path::new(&out_dir).join("kraken_symbols_map.rs");
+    let mut f = File::create(&dest_path).unwrap();
+
+    write!(
+        f,
+        r#"
+use phf::Map;
+
+pub static KRAKEN_SYMBOLS: Map<&'static str, &'static str> = phf::phf_map! {{
+{}
+}};
+"#,
+        asset_phf_entries.join("\n")
+    )
+    .unwrap();
+
+    println!("Generated {} asset mappings", asset_phf_entries.len());
+
+    // Generate pair PHF map entries
+    let mut pair_phf_entries = Vec::new();
     if let Some(result) = pairs_json["result"].as_object() {
         for (pair_name, pair_info) in result {
             if let (Some(base), Some(quote)) =
@@ -44,7 +70,7 @@ fn main() {
                 let base_altname = asset_altnames.get(base).unwrap().clone();
                 let quote_altname = asset_altnames.get(quote).unwrap().clone();
 
-                phf_entries.push(format!(
+                pair_phf_entries.push(format!(
                     "    \"{}\" => (\"{}\", \"{}\"),",
                     pair_name, base_altname, quote_altname
                 ));
@@ -52,7 +78,7 @@ fn main() {
         }
     }
 
-    // Write the generated code to a file
+    // Write the generated pair PHF code to a file
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("kraken_pairs_map.rs");
     let mut f = File::create(&dest_path).unwrap();
@@ -66,9 +92,9 @@ pub static KRAKEN_PAIRS: Map<&'static str, (&'static str, &'static str)> = phf::
 {}
 }};
 "#,
-        phf_entries.join("\n")
+        pair_phf_entries.join("\n")
     )
     .unwrap();
 
-    println!("Generated {} pair mappings", phf_entries.len());
+    println!("Generated {} pair mappings", pair_phf_entries.len());
 }

@@ -85,11 +85,11 @@ fn kraken_private_request(
         .form(params)
         .send()
         .expect("API request failed");
-    let json: Value = res.json().expect("Invalid JSON");
+    let mut json: Value = res.json().expect("Invalid JSON");
     if !json["error"].as_array().unwrap().is_empty() {
         panic!("Kraken error: {:?}", json["error"]);
     }
-    json["result"].clone()
+    json["result"].take()
 }
 
 pub fn fetch_kraken_activity(

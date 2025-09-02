@@ -1,6 +1,7 @@
 mod exchange_rate;
 mod kraken;
 mod kraken_pairs;
+mod kraken_symbols;
 mod report;
 
 use chrono::NaiveDate;
@@ -9,7 +10,7 @@ use report::process_kraken_data;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use crate::report::generate_report;
+use crate::report::{generate_report, transactions::Transaction};
 
 fn to_decimal(value: &Value) -> Decimal {
     Decimal::try_from(value.as_number().unwrap().as_str()).unwrap()
@@ -60,7 +61,19 @@ fn main() {
     println!("Trades: {:#?}", trades);
 
     let transactions = process_kraken_data(deposits, withdrawals, trades);
-    println!("============\nTransactions: {:#?}", transactions);
+
+    let mut brl_spent_in_purchases = Decimal::ZERO;
+    for t in &transactions {
+        if let Transaction::Purchase(purchase) = t {
+            brl_spent_in_purchases += purchase.operation_value;
+            if let Some(fee) = purchase.base.operation_fees {
+                brl_spent_in_purchases += fee;
+            }
+        }
+    }
+    println!("Total BRL spent in purchases: {}", brl_spent_in_purchases);
+
+    //println!("============\nTransactions: {:#?}", transactions);
 
     // Get first command line argument as report file name
     generate_report(transactions, &report_file).expect("Failed to generate report");
